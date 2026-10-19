@@ -1,0 +1,1454 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Absensi & Operasional Taichan KTL Cemara Asri</title>
+    <meta name="theme-color" content="#121212">
+    <link rel="icon" type="image/png" href="/img/favicon.png">
+    <link rel="apple-touch-icon" href="/img/apple-touch-icon.png">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Taichan KTL">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        // Warna brand dari logo Sate Taichan KTL: kuning, merah, hitam
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        ktl: { yellow: '#F9C932', 'yellow-dark': '#E0AE14', red: '#B00000', 'red-light': '#D41A1A', 'red-dark': '#7A0000' },
+                        slate: { 100: '#f5f5f5', 150: '#ececec', 200: '#e5e5e5', 300: '#d4d4d4', 400: '#a3a3a3', 500: '#737373', 600: '#525252', 700: '#3a3a3a', 800: '#1f1f1f', 900: '#121212', 950: '#0a0a0a' }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <!-- SheetJS untuk Export Excel -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- Google Fonts Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        [x-cloak] { display: none !important; }
+        /* Ikuti ukuran layar saat perangkat diputar, termasuk area kamera/notch. */
+        body.min-h-screen { min-height: 100vh; min-height: 100dvh; }
+        body > header[class] {
+            padding-top: max(0.75rem, env(safe-area-inset-top));
+            padding-left: max(1rem, env(safe-area-inset-left));
+            padding-right: max(1rem, env(safe-area-inset-right));
+        }
+        body > main[class] {
+            padding-left: max(1rem, env(safe-area-inset-left));
+            padding-right: max(1rem, env(safe-area-inset-right));
+            padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+        }
+        body nav[class] {
+            padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
+            padding-left: max(0.5rem, env(safe-area-inset-left));
+            padding-right: max(0.5rem, env(safe-area-inset-right));
+        }
+        nav > button { flex-shrink: 0; }
+        .install-help-panel {
+            max-height: calc(100vh - 2rem);
+            max-height: calc(100dvh - 2rem - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+            overflow-y: auto;
+        }
+        [role="dialog"] { max-height: calc(100dvh - 2rem - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
+        body > header[class] { gap: 0.75rem; flex-wrap: wrap; }
+        body > header > div { min-width: 0; }
+        @media (orientation: landscape) {
+            main, nav { max-width: 80rem !important; }
+        }
+        @media (orientation: landscape) and (max-height: 500px) {
+            body > header[class] { position: static; }
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col justify-between selection:bg-ktl-yellow selection:text-black" x-data="taichanApp()" x-cloak>
+
+    <!-- HEADER / TOPBAR -->
+    <header class="bg-slate-800 border-b border-slate-700 sticky top-0 z-50 px-4 py-3 shadow-md flex justify-between items-center">
+        <div class="flex items-center space-x-3">
+            <img src="/img/logo.png" alt="Logo Sate Taichan KTL" class="w-11 h-10 object-contain drop-shadow">
+            <div>
+                <h1 class="font-bold text-sm md:text-base tracking-wide text-ktl-yellow">TAICHAN KTL CEMARA ASRI</h1>
+                <p class="text-xs text-slate-400" x-text="currentUser ? (currentUser.role === 'supervisor' ? 'Panel Supervisor' : 'Staff: ' + currentUser.nama + ' (' + currentUser.jabatan + ')') : 'Sistem Absensi & Operasional'"></p>
+            </div>
+        </div>
+        <div class="flex items-center space-x-2">
+            <button @click="toggleLandscape()" :disabled="orientationBusy" class="border border-slate-600 hover:border-ktl-yellow text-slate-200 text-xs font-medium px-3 py-2 rounded-lg disabled:opacity-60" :aria-label="manualLandscape ? 'Kembali ke rotasi otomatis' : 'Aktifkan mode landscape'" x-text="manualLandscape ? 'Rotasi otomatis' : 'Landscape'"></button>
+            <template x-if="loading">
+                <span class="w-4 h-4 border-2 border-ktl-yellow border-t-transparent rounded-full animate-spin"></span>
+            </template>
+            <template x-if="!isStandalone">
+                <button @click="installApp()" class="bg-ktl-yellow hover:bg-ktl-yellow-dark text-slate-900 text-xs font-semibold px-3 py-1.5 rounded-lg transition flex items-center gap-1">
+                    <span>⬇</span><span>Unduh App</span>
+                </button>
+            </template>
+            <template x-if="currentUser">
+                <button @click="logout()" class="bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-medium px-3 py-1.5 rounded-lg border border-red-500/20 transition">
+                    Keluar
+                </button>
+            </template>
+        </div>
+    </header>
+
+    <div x-show="orientationHelp" x-cloak @click.self="orientationHelp = false" @keydown.escape.window="orientationHelp = false" class="fixed inset-0 z-[60] bg-black/70 flex items-center justify-center p-4">
+        <section role="dialog" aria-modal="true" aria-labelledby="orientation-title" class="install-help-panel bg-slate-800 border border-slate-700 rounded-2xl p-5 w-full max-w-sm shadow-xl">
+            <h2 id="orientation-title" class="font-bold text-ktl-yellow mb-3">Mode landscape di tablet</h2>
+            <p class="text-sm text-slate-200 mb-3">Browser ini belum mengizinkan pengaturan landscape langsung. Aktifkan rotasi otomatis di tablet, lalu putar tablet ke posisi mendatar.</p>
+            <ul class="text-sm text-slate-300 space-y-3 list-disc pl-4">
+                <li><b>Android:</b> buka panel pengaturan cepat, lalu aktifkan Rotasi otomatis (matikan kunci Potret).</li>
+                <li><b>iPad:</b> buka Pusat Kontrol, lalu matikan Kunci Rotasi.</li>
+                <li>Jika aplikasi yang sudah terpasang tetap portrait, buka situs ini di Chrome atau Safari. Bila browser sudah bisa landscape, hapus ikon aplikasi lama lalu pasang kembali untuk memperbarui pengaturan orientasinya.</li>
+            </ul>
+            <button @click="orientationHelp = false" class="mt-5 w-full bg-ktl-red hover:bg-ktl-red-light text-white font-semibold py-2.5 rounded-xl text-sm">Mengerti</button>
+        </section>
+    </div>
+
+    <!-- POPUP PANDUAN PASANG APLIKASI -->
+    <div x-show="installHelp" x-cloak @click.self="installHelp = false" class="fixed inset-0 z-[60] bg-black/70 flex items-end sm:items-center justify-center p-4">
+        <div class="install-help-panel bg-slate-800 border border-slate-700 rounded-2xl p-5 w-full max-w-sm shadow-xl">
+            <div class="flex items-center gap-3 mb-4">
+                <img src="/img/icon-192.png" alt="" class="w-12 h-12 rounded-xl">
+                <div>
+                    <h3 class="font-bold text-white text-sm">Pasang Aplikasi Taichan KTL</h3>
+                    <p class="text-xs text-slate-400">Gratis, langsung dari browser — tanpa Play Store / App Store</p>
+                </div>
+            </div>
+            <template x-if="installHelp === 'ios'">
+                <ol class="text-sm text-slate-200 space-y-2 list-decimal list-inside">
+                    <li>Buka halaman ini di <b>Safari</b>.</li>
+                    <li>Ketuk tombol <b>Bagikan</b> <span class="inline-block px-1.5 rounded bg-slate-700">⬆︎</span> di bawah layar.</li>
+                    <li>Pilih <b>"Tambahkan ke Layar Utama"</b> (Add to Home Screen).</li>
+                    <li>Ketuk <b>Tambah</b>. Ikon aplikasi muncul di layar utama iPhone.</li>
+                </ol>
+            </template>
+            <template x-if="installHelp === 'android'">
+                <ol class="text-sm text-slate-200 space-y-2 list-decimal list-inside">
+                    <li>Buka halaman ini di <b>Google Chrome</b>.</li>
+                    <li>Ketuk menu <b>⋮</b> di pojok kanan atas.</li>
+                    <li>Pilih <b>"Instal aplikasi"</b> atau <b>"Tambahkan ke layar utama"</b>.</li>
+                    <li>Ketuk <b>Instal</b>. Ikon aplikasi muncul di layar utama HP.</li>
+                </ol>
+            </template>
+            <button @click="installHelp = false" class="mt-5 w-full bg-ktl-red hover:bg-ktl-red-light text-white font-semibold py-2.5 rounded-xl text-sm transition">Mengerti</button>
+        </div>
+    </div>
+
+    <!-- MAIN CONTAINER -->
+    <main class="flex-grow max-w-md md:max-w-4xl mx-auto w-full p-4 mb-16">
+
+        <!-- ================= HALAMAN LOGIN ================= -->
+        <template x-if="!currentUser">
+            <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-xl max-w-sm mx-auto mt-10">
+                <div class="text-center mb-6">
+                    <img src="/img/logo.png" alt="Logo Sate Taichan KTL" class="w-32 h-auto mx-auto mb-3 drop-shadow-lg">
+                    <h2 class="text-lg font-bold text-white">Login Aplikasi</h2>
+                    <p class="text-xs text-slate-400">Masuk sebagai Staff (No WA) atau Supervisor (PIN)</p>
+                </div>
+
+                <!-- Tab Pemilih Login -->
+                <div class="flex bg-slate-900 p-1 rounded-xl mb-6 border border-slate-700">
+                    <button @click="loginType = 'staff'; loginError = ''" :class="loginType === 'staff' ? 'bg-ktl-red text-white shadow' : 'text-slate-400 hover:text-white'" class="flex-1 py-2 text-xs font-semibold rounded-lg transition">Staff</button>
+                    <button @click="loginType = 'supervisor'; loginError = ''" :class="loginType === 'supervisor' ? 'bg-ktl-red text-white shadow' : 'text-slate-400 hover:text-white'" class="flex-1 py-2 text-xs font-semibold rounded-lg transition">Supervisor</button>
+                </div>
+
+                <!-- Form Staff (No WA) -->
+                <template x-if="loginType === 'staff'">
+                    <form @submit.prevent="loginStaff()" class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-300 mb-1">Nomor WhatsApp</label>
+                            <input type="tel" inputmode="numeric" x-model="loginInput" placeholder="Contoh: 087898041212" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-ktl-yellow">
+                        </div>
+                        <button type="submit" :disabled="loading" class="w-full bg-ktl-red hover:bg-ktl-red-light disabled:opacity-60 text-white font-semibold py-2.5 rounded-xl text-sm transition shadow-lg shadow-ktl-red/30">Masuk Sebagai Staff</button>
+                    </form>
+                </template>
+
+                <!-- Form Supervisor (PIN) -->
+                <template x-if="loginType === 'supervisor'">
+                    <form @submit.prevent="loginSupervisor()" class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-300 mb-1">PIN Supervisor</label>
+                            <input type="password" inputmode="numeric" x-model="loginInput" placeholder="Masukkan PIN" maxlength="6" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-ktl-yellow tracking-widest text-center text-lg">
+                        </div>
+                        <button type="submit" :disabled="loading" class="w-full bg-ktl-red hover:bg-ktl-red-light disabled:opacity-60 text-white font-semibold py-2.5 rounded-xl text-sm transition shadow-lg shadow-ktl-red/30">Masuk Sebagai Supervisor</button>
+                    </form>
+                </template>
+
+                <template x-if="loginError">
+                    <p class="text-red-400 text-xs text-center mt-3" x-text="loginError"></p>
+                </template>
+            </div>
+        </template>
+
+        <!-- ================= UTAMA APLIKASI (SUDAH LOGIN) ================= -->
+        <template x-if="currentUser">
+          <div>
+            <!-- Notifikasi Tanggal 15 & 30 Compliment -->
+            <template x-if="isComplimentDay && currentUser.role === 'supervisor'">
+                <div class="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 mb-4 flex items-start space-x-3">
+                    <span class="text-xl">⚠️</span>
+                    <div class="flex-1">
+                        <h4 class="text-sm font-bold text-amber-400">Jadwal Pengisian Compliment Staff</h4>
+                        <p class="text-xs text-slate-300 mt-0.5">Hari ini adalah tanggal 15/30. Staff mengajukan 1 makanan dan 1 minuman. Tinjau pengajuan yang sudah masuk.</p>
+                        <p class="text-[10px] text-amber-300 mt-1" x-text="'Sudah terisi: ' + countKomplimenPeriodeIni + ' / ' + staffList.length + ' staff'"></p>
+                        <button @click="activeTab = 'komplimen'" class="mt-2 bg-amber-500 text-slate-950 font-bold px-3 py-1.5 rounded-lg text-xs hover:bg-amber-400 transition">Tinjau Komplimen</button>
+                    </div>
+                </div>
+            </template>
+
+            <!-- 1. TAB BERANDA / HOME -->
+            <template x-if="activeTab === 'beranda'">
+                <div class="space-y-4">
+                    <!-- Banner Waktu & Status -->
+                    <div class="bg-gradient-to-r from-ktl-red to-ktl-red-dark border-b-4 border-ktl-yellow rounded-2xl p-5 text-white shadow-lg">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <span class="bg-black/20 text-xs px-2.5 py-1 rounded-full font-medium" x-text="currentDateFormatted"></span>
+                                <h2 class="text-xl font-bold mt-2" x-text="'Halo, ' + currentUser.nama + '!'"></h2>
+                                <p class="text-xs text-yellow-100 mt-0.5" x-text="currentUser.role === 'supervisor' ? 'Supervisor KTL Cemara Asri' : currentUser.jabatan + ' - Shift: ' + getStaffShiftToday(currentUser.id)"></p>
+                            </div>
+                            <div class="text-right">
+                                <span class="text-2xl font-bold" x-text="currentTimeFormatted"></span>
+                                <p class="text-[10px] text-yellow-100">Waktu Outlet (WIB)</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Statistik Hari Ini -->
+                    <div class="grid grid-cols-3 gap-3">
+                        <div class="bg-slate-800 border border-slate-700 p-3 rounded-xl text-center">
+                            <span class="text-xs text-slate-400 block">Hadir</span>
+                            <span class="text-lg font-bold text-emerald-400" x-text="countHadirToday"></span>
+                        </div>
+                        <div class="bg-slate-800 border border-slate-700 p-3 rounded-xl text-center">
+                            <span class="text-xs text-slate-400 block">Telat</span>
+                            <span class="text-lg font-bold text-amber-400" x-text="countTelatToday"></span>
+                        </div>
+                        <div class="bg-slate-800 border border-slate-700 p-3 rounded-xl text-center">
+                            <span class="text-xs text-slate-400 block">Off / Libur</span>
+                            <span class="text-lg font-bold text-red-400" x-text="countOffToday"></span>
+                        </div>
+                    </div>
+
+                    <div class="space-y-2">
+                        <template x-for="n in pemberitahuan" :key="n.tab"><button @click="activeTab=n.tab" class="block w-full text-left bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded-xl p-3 text-xs" x-text="n.pesan"></button></template>
+                        <template x-for="a in pengingatPulang" :key="a.id"><div class="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-xs space-y-2"><p x-text="a.nama + ': sudah lewat 30 menit dari jam selesai shift. Belum absen pulang.'"></p><div x-show="currentUser.role === 'staff'"><button @click="activeTab='absen'" class="text-ktl-yellow p-2">1. Absen pulang</button><button @click="run('lembur',{method:'POST',body:{}},'Status sedang lembur tersimpan.')" class="text-emerald-400 p-2">2. Sedang Lembur</button></div></div></template>
+                    </div>
+                    <!-- Live Staff Yang Sudah Absen Hari Ini -->
+                    <div class="bg-slate-800 border border-slate-700 rounded-2xl p-4">
+                        <h3 class="text-lg font-bold text-white mb-4">🟢 Live Kehadiran Hari Ini</h3>
+                        <div class="space-y-3 max-h-[32rem] overflow-y-auto pr-1">
+                            <template x-for="ab in getLiveAbsenToday()" :key="ab.id">
+                                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/60 p-4 rounded-xl border border-slate-700/50 text-base">
+                                    <div class="flex items-center gap-4 min-w-0">
+                                        <img @click="bukti = ab" role="button" tabindex="0" @keydown.enter="bukti = ab" alt="Lihat bukti kehadiran" :src="ab.foto" loading="lazy" class="w-16 h-16 sm:w-20 sm:h-20 shrink-0 rounded-xl object-cover border border-slate-600 bg-slate-700">
+                                        <div>
+                                            <button @click="bukti = ab" class="text-lg sm:text-xl font-semibold text-white underline text-left break-words" x-text="ab.nama"></button><button @click="bukti = ab" class="block text-ktl-yellow text-sm py-1">Lihat foto & lokasi</button>
+                                            <p class="text-base leading-relaxed text-slate-300" x-text="ab.shift + ' • Masuk: ' + ab.waktu + (ab.waktuPulang ? ' • Pulang: ' + ab.waktuPulang : '')"></p>
+                                        </div>
+                                    </div>
+                                    <span class="self-start sm:self-center shrink-0 px-3 py-1.5 rounded-lg text-sm font-bold"
+                                        :class="{
+                                            'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20': ab.status === 'Tepat Waktu' || ab.status === 'Sudah Izin',
+                                            'bg-amber-500/10 text-amber-400 border border-amber-500/20': ab.status === 'Telat' || ab.status === 'Menunggu Review',
+                                            'bg-red-500/10 text-red-400 border border-red-500/20': ab.status === 'Off'
+                                        }"
+                                        x-text="ab.status">
+                                    </span>
+                                </div>
+                            </template>
+                            <template x-if="getLiveAbsenToday().length === 0">
+                                <p class="text-base text-slate-400 text-center py-4">Belum ada staff yang melakukan absen hari ini.</p>
+                            </template>
+                        </div>
+                    </div>
+                    <!-- Daftar Staff OFF Hari Ini -->
+                    <div class="bg-slate-800 border border-slate-700 rounded-2xl p-4">
+                        <h3 class="text-sm font-bold text-white mb-2">🏖️ Staff Off / Libur Hari Ini</h3>
+                        <div class="space-y-2">
+                            <template x-for="st in getStaffOffTodayList()" :key="st.id">
+                                <div class="flex justify-between items-center bg-slate-900/60 p-2.5 rounded-xl border border-slate-700/50 text-xs">
+                                    <span class="font-medium text-slate-200" x-text="st.nama"></span>
+                                    <span class="bg-red-500/10 text-red-400 px-2 py-0.5 rounded font-semibold" x-text="st.jabatan"></span>
+                                </div>
+                            </template>
+                            <template x-if="getStaffOffTodayList().length === 0">
+                                <p class="text-xs text-slate-400 text-center py-2">Tidak ada staff yang off hari ini.</p>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- Grafik Sederhana Telat Staff (Bulan Ini) -->
+                    <div class="bg-slate-800 border border-slate-700 rounded-2xl p-4">
+                        <h3 class="text-sm font-bold text-white mb-3 flex items-center justify-between">
+                            <span>📊 Grafik Keterlambatan Staff</span>
+                            <span class="text-xs text-slate-400 font-normal">Bulan Ini</span>
+                        </h3>
+                        <div class="space-y-2 max-h-44 overflow-y-auto pr-1">
+                            <template x-for="st in staffList" :key="st.id">
+                                <div class="text-xs">
+                                    <div class="flex justify-between mb-1">
+                                        <span class="text-slate-300 font-medium" x-text="st.nama"></span>
+                                        <span class="text-slate-400" x-text="getTotalTelatStaff(st.id) + 'x Telat'"></span>
+                                    </div>
+                                    <div class="w-full bg-slate-900 rounded-full h-2 overflow-hidden border border-slate-700">
+                                        <div class="bg-amber-500 h-2 rounded-full transition-all duration-500" :style="'width: ' + Math.min(getTotalTelatStaff(st.id) * 10, 100) + '%'"></div>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                </div>
+            </template>
+
+            <!-- 2. TAB ABSENSI & OPERASIONAL -->
+            <template x-if="activeTab === 'absen'">
+                <div class="space-y-4">
+                    <div class="bg-slate-800 border border-slate-700 rounded-2xl p-5">
+                        <h2 class="text-base font-bold text-white mb-1">⏱️ Menu Absensi & Operasional</h2>
+                        <p class="text-xs text-slate-400 mb-4">Lakukan absensi masuk, catat lembur, atau absen pulang (off shift).</p>
+
+                        <!-- Jika Supervisor melihat tab ini -->
+                        <template x-if="currentUser.role === 'supervisor'">
+                            <div class="bg-slate-900 p-4 rounded-xl text-center border border-slate-700">
+                                <p class="text-xs text-slate-400 mb-2">Anda login sebagai Supervisor. Menu absensi khusus untuk akun staff.</p>
+                                <button @click="activeTab = 'pengaturan'" class="bg-ktl-red text-white text-xs font-semibold px-4 py-2 rounded-xl">Buka Panel Pengaturan</button>
+                            </div>
+                        </template>
+
+                        <!-- Jika Staff -->
+                        <template x-if="currentUser.role === 'staff'">
+                            <div class="space-y-4">
+                                <!-- Status Cek Jadwal Hari Ini -->
+                                <div class="bg-slate-900 p-3.5 rounded-xl border border-slate-700 flex justify-between items-center text-xs">
+                                    <div>
+                                        <span class="text-slate-400 block">Jadwal Shift Anda Hari Ini:</span>
+                                        <span class="font-bold text-ktl-yellow text-sm" x-text="getStaffShiftToday(currentUser.id)"></span>
+                                    </div>
+                                    <div class="text-right">
+                                        <span class="text-slate-400 block">Status Hari Ini:</span>
+                                        <span class="font-semibold uppercase text-white" x-text="getStaffStatusTodayText(currentUser.id)"></span>
+                                    </div>
+                                </div>
+
+                                <!-- FORM ABSEN MASUK -->
+                                <template x-if="!hasCheckedInToday(currentUser.id) && !isStaffOffToday(currentUser.id)">
+                                    <div class="space-y-3 border-t border-slate-700 pt-4">
+                                        <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider">1. Absensi Kehadiran Masuk</h3>
+
+                                        <!-- Pilih Shift -->
+                                        <div>
+                                            <label class="block text-xs text-slate-400 mb-1">Pilih Shift Masuk</label>
+                                            <select x-model="absenForm.shift" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
+                                                <template x-for="sh in shifts" :key="sh.nama"><option :value="sh.nama" x-text="sh.nama + ' (' + sh.mulai + ' - ' + sh.selesai + ')'"></option></template>
+                                            </select>
+                                        </div>
+
+                                        <!-- Foto Wajah & Lokasi Outlet -->
+                                        <div>
+                                            <label class="block text-xs text-slate-400 mb-1">Foto Wajah di Outlet Taichan KTL Cemara Asri</label>
+                                            <div class="flex items-center space-x-2">
+                                                <label class="bg-slate-700 p-3 rounded-xl text-xs cursor-pointer focus-within:ring-2 focus-within:ring-amber-300">
+                                                    <span>Ambil foto masuk</span>
+                                                    <input type="file" accept="image/*" capture="user" @change="handlePhotoUpload($event)" :disabled="photoBusy" aria-label="Ambil foto masuk dengan kamera perangkat" class="sr-only">
+                                                </label>
+                                            </div>
+                                            <p class="mt-2 text-xs text-slate-400">Gunakan kamera perangkat untuk foto wajah. Izinkan lokasi setelah mengambil foto.</p>
+                                            <p x-show="photoBusy" role="status" class="mt-2 text-xs text-amber-300">Memeriksa GPS dan memproses foto…</p>
+                                            <template x-if="absenForm.foto">
+                                                <div class="mt-2 relative w-20 h-20 rounded-xl overflow-hidden border border-slate-600">
+                                                    <img :src="absenForm.foto" class="w-full h-full object-cover">
+                                                </div>
+                                            </template>
+                                        </div>
+
+                                        <!-- Alasan Telat (jika telat) -->
+                                        <div>
+                                            <label class="block text-xs text-slate-400 mb-1">Keterangan / Alasan (Opsional, isi jika telat)</label>
+                                            <input type="text" x-model="absenForm.keterangan" placeholder="Contoh: Ban bocor di jalan" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
+                                        </div>
+
+                                        <button @click="submitAbsen()" :disabled="loading" class="w-full bg-ktl-red hover:bg-ktl-red-light disabled:opacity-60 text-white font-bold py-2.5 rounded-xl text-xs transition shadow-lg shadow-ktl-red/30">Kirim Absen Kehadiran</button>
+                                    </div>
+                                </template>
+
+                                <!-- Jika Sudah Absen Masuk -->
+                                <template x-if="!!getPulangRecord().id">
+                                    <div class="bg-emerald-500/10 border border-emerald-500/30 p-4 rounded-xl text-center space-y-2">
+                                        <span class="text-2xl">✅</span>
+                                        <h4 class="text-sm font-bold text-emerald-400">Anda Sudah Melakukan Absen Hari Ini</h4>
+                                        <p class="text-xs text-slate-300" x-text="'Status: ' + getPulangRecord().status + ' • Masuk ' + getPulangRecord().waktu"></p>
+                                    </div>
+                                </template>
+
+                                <!-- Jika Status Hari Ini OFF -->
+                                <template x-if="!hasCheckedInToday(currentUser.id) && isStaffOffToday(currentUser.id)">
+                                    <div class="bg-red-500/10 border border-red-500/30 p-4 rounded-xl text-center space-y-2">
+                                        <span class="text-2xl">🏖️</span>
+                                        <h4 class="text-sm font-bold text-red-400">Jadwal Anda Hari Ini adalah OFF / Libur</h4>
+                                        <p class="text-xs text-slate-300">Anda tidak dapat melakukan absen masuk. Jika ingin masuk, batalkan jadwal off di menu Request Off.</p>
+                                    </div>
+                                </template>
+
+                                <!-- ABSEN PULANG & LEMBUR (OFF SHIFT) -->
+                                <template x-if="!!getPulangRecord().id">
+                                    <div class="space-y-3 border-t border-slate-700 pt-4">
+                                        <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider">2. Absen Pulang & Jam Lembur</h3><button x-show="!getPulangRecord().waktuPulang" @click="run('lembur',{method:'POST',body:{}},'Status sedang lembur tersimpan.')" class="text-xs text-emerald-400">Sedang Lembur</button>
+                                        <template x-if="getPulangRecord().waktuPulang">
+                                            <p class="text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-2.5" x-text="'Tercatat pulang ' + getPulangRecord().waktuPulang + ' • Lembur ' + getPulangRecord().lembur + ' jam. Absen pulang sudah tersimpan.'"></p>
+                                        </template>
+                                        <div>
+                                            <label class="block text-xs text-slate-400 mb-1">Foto Pulang / Meninggalkan Outlet</label>
+                                            <label class="inline-block bg-slate-700 p-3 rounded-xl text-xs cursor-pointer focus-within:ring-2 focus-within:ring-amber-300" :class="{'opacity-50': photoBusy || !!getPulangRecord().waktuPulang}">
+                                                <span>Ambil foto pulang</span>
+                                                <input type="file" accept="image/*" capture="user" @change="handlePulangPhoto($event)" :disabled="photoBusy || !!getPulangRecord().waktuPulang" aria-label="Ambil foto pulang dengan kamera perangkat" class="sr-only">
+                                            </label>
+                                            <p x-show="photoBusy" role="status" class="mt-2 text-xs text-amber-300">Memeriksa GPS dan memproses foto…</p>
+                                            <template x-if="pulangFoto">
+                                                <div class="mt-2 w-20 h-20 rounded-xl overflow-hidden border border-slate-600">
+                                                    <img :src="pulangFoto" class="w-full h-full object-cover">
+                                                </div>
+                                            </template>
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs text-slate-400 mb-1">Input Jam Lembur (Jam)</label>
+                                            <input type="number" x-model="lemburInput" placeholder="0" min="0" max="5" step="0.5" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
+                                        </div>
+                                        <button @click="submitPulangLembur()" :disabled="loading || !!getPulangRecord().waktuPulang" class="w-full bg-slate-700 hover:bg-slate-600 disabled:opacity-60 text-white font-bold py-2.5 rounded-xl text-xs transition">Simpan Absen Pulang & Lembur</button>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </template>
+
+            <!-- 3. TAB REQUEST OFF -->
+            <template x-if="activeTab === 'off'">
+                <div class="space-y-4">
+                    <div class="bg-slate-800 border border-slate-700 rounded-2xl p-5">
+                        <h2 class="text-base font-bold text-white mb-1">🏖️ Request Off / Libur Mingguan</h2>
+                        <p class="text-xs text-slate-400 mb-4">Jatah off adalah 4 kali sebulan. Hanya bisa diambil hari Senin - Jumat (Sabtu, Minggu, Tanggal Merah, H-1 Merah dilarang).</p>
+
+                        <!-- Staff Off per Minggu (terlihat semua staff) -->
+                        <div class="bg-slate-900 p-4 rounded-xl border border-slate-700 space-y-3 mb-4">
+                            <div class="flex items-center justify-between">
+                                <button @click="offWeekOffset--" class="text-slate-300 hover:text-white bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1 text-xs">‹</button>
+                                <div class="text-center">
+                                    <h3 class="text-xs font-bold text-ktl-yellow uppercase tracking-wider" x-text="offWeekOffset === 0 ? 'Staff Off Minggu Ini' : (offWeekOffset === 1 ? 'Staff Off Minggu Depan' : 'Staff Off Mingguan')"></h3>
+                                    <p class="text-[10px] text-slate-400" x-text="offWeekLabel"></p>
+                                </div>
+                                <button @click="offWeekOffset++" class="text-slate-300 hover:text-white bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1 text-xs">›</button>
+                            </div>
+                            <div class="space-y-1.5">
+                                <template x-for="day in offWeekDays" :key="day.tanggal">
+                                    <div class="flex items-start gap-3 text-xs border-t border-slate-800 pt-1.5 first:border-0 first:pt-0">
+                                        <span class="w-20 shrink-0 font-semibold" :class="day.tanggal === today ? 'text-ktl-yellow' : 'text-slate-300'" x-text="day.label"></span>
+                                        <div class="flex flex-wrap gap-1 flex-1">
+                                            <template x-for="r in day.list" :key="r.id">
+                                                <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                                                    :class="r.status === 'Disetujui' ? 'bg-red-500/10 text-red-300' : 'bg-amber-500/10 text-amber-400'"
+                                                    x-text="r.namaStaff + (r.status === 'Disetujui' ? '' : ' (menunggu)')"></span>
+                                            </template>
+                                            <template x-if="day.list.length === 0">
+                                                <span class="text-[10px] text-slate-500">—</span>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+
+                        <!-- Jika Supervisor -->
+                        <template x-if="currentUser.role === 'supervisor'">
+                            <div class="space-y-3">
+                                <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider">Daftar Request Off Semua Staff</h3>
+                                <div class="space-y-2 max-h-96 overflow-y-auto pr-1">
+                                    <template x-for="req in requestOffList" :key="req.id">
+                                        <div class="bg-slate-900 p-3 rounded-xl border border-slate-700 text-xs space-y-2">
+                                            <div class="flex justify-between items-center">
+                                                <div>
+                                                    <p class="font-bold text-white" x-text="req.namaStaff"></p>
+                                                    <p class="text-slate-400 text-[10px]" x-text="'Tanggal: ' + formatTanggal(req.tanggal)"></p>
+                                                </div>
+                                                <span class="px-2.5 py-1 rounded-full text-[10px] font-bold"
+                                                    :class="{
+                                                        'bg-amber-500/10 text-amber-400': req.status === 'Pending',
+                                                        'bg-emerald-500/10 text-emerald-400': req.status === 'Disetujui',
+                                                        'bg-red-500/10 text-red-400': req.status === 'Ditolak'
+                                                    }" x-text="req.status">
+                                                </span>
+                                            </div>
+                                            <template x-if="req.status === 'Pending'">
+                                                <div class="flex space-x-2">
+                                                    <button @click="setStatusOff(req.id, 'Disetujui')" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white py-1.5 rounded-lg font-semibold transition">Setujui</button>
+                                                    <button @click="setStatusOff(req.id, 'Ditolak')" class="flex-1 bg-red-600 hover:bg-red-500 text-white py-1.5 rounded-lg font-semibold transition">Tolak</button>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </template>
+                                    <template x-if="requestOffList.length === 0">
+                                        <p class="text-xs text-slate-400 text-center py-2">Belum ada request off.</p>
+                                    </template>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- Jika Staff -->
+                        <template x-if="currentUser.role === 'staff'">
+                            <div class="space-y-4">
+                                <div class="bg-slate-900 p-3.5 rounded-xl border border-slate-700 flex justify-between items-center text-xs">
+                                    <span class="text-slate-400">Sisa Kuota Off Bulan Ini:</span>
+                                    <span class="font-bold text-ktl-yellow text-sm" x-text="getSisaOff(currentUser.id) + ' / 4 Hari'"></span>
+                                </div>
+
+                                <div class="space-y-3 border-t border-slate-700 pt-4">
+                                    <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider">Ajukan Tanggal Off Baru</h3>
+                                    <div>
+                                        <label class="block text-xs text-slate-400 mb-1">Pilih Tanggal Off (Senin - Jumat)</label>
+                                        <input type="date" x-model="offFormDate" :min="today" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white [color-scheme:dark]">
+                                    </div>
+                                    <button @click="submitRequestOff()" :disabled="loading" class="w-full bg-ktl-red hover:bg-ktl-red-light disabled:opacity-60 text-white font-bold py-2.5 rounded-xl text-xs transition shadow-lg shadow-ktl-red/30">Kirim Request Off</button>
+                                </div>
+
+                                <!-- Riwayat Request Off Staff -->
+                                <div class="space-y-2 border-t border-slate-700 pt-4">
+                                    <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider">Riwayat Off Saya</h3>
+                                    <div class="space-y-2">
+                                        <template x-for="req in getMyRequestOff(currentUser.id)" :key="req.id">
+                                            <div class="bg-slate-900 p-3 rounded-xl border border-slate-700 text-xs flex justify-between items-center">
+                                                <div>
+                                                    <p class="font-bold text-white" x-text="formatTanggal(req.tanggal)"></p>
+                                                    <p class="text-[10px]" :class="req.status === 'Disetujui' ? 'text-emerald-400' : (req.status === 'Ditolak' ? 'text-red-400' : 'text-amber-400')" x-text="'Status: ' + req.status"></p>
+                                                </div>
+                                                <template x-if="req.tanggal >= today">
+                                                    <button @click="cancelRequestOff(req.id)" class="text-red-400 hover:text-red-300 text-[10px] bg-red-500/10 px-2 py-1 rounded">Batalkan</button>
+                                                </template>
+                                            </div>
+                                        </template>
+                                        <template x-if="getMyRequestOff(currentUser.id).length === 0">
+                                            <p class="text-xs text-slate-400 text-center py-2">Belum ada riwayat off.</p>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </template>
+
+            <!-- 4. TAB DATA KOMPLIMEN -->
+            <template x-if="activeTab === 'komplimen'">
+                <div class="space-y-4">
+                    <div class="bg-slate-800 border border-slate-700 rounded-2xl p-5">
+                        <h2 class="text-base font-bold text-white mb-1">🎁 Data Komplimen Staff</h2>
+                        <p class="text-xs text-slate-400 mb-4">Komplimen item makan & minum yang diberikan 2 kali setiap bulannya (Tanggal 15 & 30).</p>
+
+                        <template x-if="currentUser.role === 'staff' && isComplimentDay">
+                            <div class="bg-slate-900 p-4 rounded-xl space-y-3 mb-4">
+                                <p class="text-xs text-ktl-yellow">Pilih masing-masing 1 makanan dan 1 minuman untuk periode hari ini.</p>
+                                <input aria-label="Satu makanan" x-model="komplimenForm.makanan" maxlength="100" placeholder="1 menu makanan" class="w-full bg-slate-800 rounded-xl p-3 text-sm">
+                                <input aria-label="Satu minuman" x-model="komplimenForm.minuman" maxlength="100" placeholder="1 menu minuman" class="w-full bg-slate-800 rounded-xl p-3 text-sm">
+                                <button @click="saveKomplimen()" :disabled="loading" class="bg-ktl-red rounded-xl p-3 text-xs">Ajukan ke supervisor</button>
+                            </div>
+                        </template>
+                        <!-- Daftar Komplimen -->
+                        <div class="space-y-2">
+                            <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Riwayat Komplimen Bulan Ini</h3>
+                            <template x-for="kom in komplimenList" :key="kom.id">
+                                <div class="bg-slate-900 p-3 rounded-xl border border-slate-700 text-xs flex justify-between items-center">
+                                    <div>
+                                        <p class="font-bold text-white" x-text="kom.namaStaff"></p>
+                                        <p class="text-ktl-yellow text-[10px]" x-text="kom.item"></p>
+                                    </div>
+                                    <div class="flex items-center space-x-2">
+                                        <span class="bg-slate-800 text-slate-300 px-2 py-1 rounded text-[10px] font-semibold" x-text="kom.periode + ' • ' + kom.status"></span>
+                                        <template x-if="currentUser.role === 'supervisor'">
+                                            <span><template x-if="kom.status === 'Pending'"><span><button @click="review('komplimen',kom.id,'Disetujui')" class="text-emerald-400 p-1">Terima</button><button @click="review('komplimen',kom.id,'Ditolak')" class="text-red-400 p-1">Tolak</button></span></template></span><button @click="deleteKomplimen(kom.id)" class="text-red-400 hover:text-red-300 text-[10px] bg-red-500/10 px-2 py-1 rounded">Hapus</button>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
+                            <template x-if="komplimenList.length === 0">
+                                <p class="text-xs text-slate-400 text-center py-2">Belum ada data komplimen tercatat.</p>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            </template>
+
+            <template x-if="activeTab === 'kasbon'">
+                <div class="bg-slate-800 border border-slate-700 rounded-2xl p-5 space-y-4">
+                    <h2 class="font-bold">Request Kasbon</h2>
+                    <p class="text-xs text-slate-400">Kasbon 1: tanggal 16. Kasbon 2: tanggal 26. Nominal Rp50.000–Rp250.000. Pilihan Tidak dicatat Rp0.</p>
+                    <template x-if="currentUser.role === 'staff'"><div class="space-y-3"><div x-show="isKasbonDay"><select aria-label="Mengambil kasbon" x-model="kasbonYa" class="bg-slate-900 p-3 rounded-xl"><option value="ya">Ya, ambil kasbon</option><option value="tidak">Tidak</option></select><input x-show="kasbonYa === 'ya'" aria-label="Nominal kasbon" type="number" min="50000" max="250000" step="1000" x-model="kasbonJumlah" class="bg-slate-900 p-3 rounded-xl w-full mt-2"><button @click="run('kasbon',{method:'POST',body:{jumlah:kasbonYa === 'ya' ? Number(kasbonJumlah) : 0}},'Jawaban kasbon dikirim ke supervisor.')" :disabled="loading" class="bg-ktl-red p-3 rounded-xl mt-2 text-xs">Kirim jawaban</button></div><p class="text-xs text-slate-400">Data kasbon staff lain hanya dapat dilihat supervisor.</p></div></template>
+                    <template x-for="(k,i) in kasbonList" :key="k.id || i"><div class="bg-slate-900 p-3 rounded-xl text-xs space-y-2"><p x-text="(k.nama || 'Anda') + ' • Kasbon ' + k.periode + ' • Rp' + Number(k.jumlah).toLocaleString('id-ID') + ' • ' + k.status"></p><template x-if="currentUser.role === 'supervisor' && k.status === 'Pending'"><div><button @click="review('kasbon',k.id,'Disetujui')" class="text-emerald-400 p-2">Terima</button><button @click="review('kasbon',k.id,'Ditolak')" class="text-red-400 p-2">Tolak</button></div></template></div></template>
+                    <p x-show="!kasbonList.length" class="text-xs text-slate-400">Belum ada jawaban kasbon bulan ini.</p>
+                </div>
+            </template>
+            <template x-if="bukti"><div class="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" @click.self="bukti=null" @keydown.escape.window="bukti=null"><section role="dialog" aria-modal="true" aria-label="Bukti kehadiran" class="bg-slate-800 rounded-2xl p-4 max-w-lg w-full max-h-[90vh] overflow-auto space-y-3"><button @click="bukti=null" class="float-right p-2">Tutup ✕</button><h2 class="font-bold" x-text="bukti.nama"></h2><template x-for="jenis in ['masuk','pulang']" :key="jenis"><div class="space-y-2"><p class="text-xs" x-text="'Bukti ' + jenis"></p><img x-show="jenis === 'masuk' ? bukti.foto : bukti.fotoPulang" :src="jenis === 'masuk' ? bukti.foto : bukti.fotoPulang" class="w-full rounded-xl" alt="Foto absensi"><p x-show="!(jenis === 'masuk' ? bukti.foto : bukti.fotoPulang)" class="text-sm text-slate-400">Foto tidak tersedia. Foto berusia lebih dari 3 bulan dihapus otomatis.</p><a x-show="jenis === 'masuk' ? bukti.lokasi : bukti.lokasiPulang" :href="mapLink(jenis === 'masuk' ? bukti.lokasi : bukti.lokasiPulang)" target="_blank" rel="noopener" class="block text-ktl-yellow text-xs">Buka lokasi di peta ↗</a><button x-show="currentUser.role === 'supervisor' && (jenis === 'masuk' ? bukti.foto : bukti.fotoPulang)" @click="unduhFoto(jenis === 'masuk' ? bukti.foto : bukti.fotoPulang)" class="text-emerald-400 text-xs">Unduh foto</button></div></template></section></div></template>
+            <!-- 5. TAB JADWAL OPERASIONAL MINGGUAN -->
+            <template x-if="activeTab === 'jadwal'">
+                <div class="space-y-4">
+                    <div class="bg-slate-800 border border-slate-700 rounded-2xl p-5">
+                        <h2 class="text-base font-bold text-white mb-1">📅 Jadwal Operasional Mingguan</h2>
+                        <p class="text-xs text-slate-400 mb-4">Pengaturan shift staff mingguan (Shift 1 / Shift 2 / Off).</p>
+
+                        <!-- Jadwal untuk periode Senin–Minggu yang dipilih -->
+                        <template x-if="currentUser.role === 'supervisor'">
+                            <div x-init="loadJadwalEditor()" class="bg-slate-900 p-4 rounded-xl border border-slate-700 space-y-3 mb-4">
+                                <h3 class="text-xs font-bold text-ktl-yellow uppercase tracking-wider">Susun Jadwal per Minggu</h3>
+                                <p class="text-[10px] text-slate-400">Atur shift Senin–Minggu untuk semua staff. Setiap periode disimpan terpisah dan dapat memiliki jadwal berbeda.</p>
+                                <div class="flex items-end gap-2">
+                                    <div class="flex-1">
+                                        <label class="block text-xs text-slate-400 mb-1">Tanggal dalam minggu</label>
+                                        <input type="date" x-model="jadwalMinggu" :disabled="loading || jadwalMemuat" @change="loadJadwalEditor()" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white [color-scheme:dark]">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-slate-400 mb-1">Isi semua sel</label>
+                                        <select @change="isiSemuaJadwal($event.target.value); $event.target.value = ''" class="bg-slate-800 border border-slate-700 rounded-xl px-2 py-2 text-xs text-white">
+                                            <option value="">Pilih…</option>
+                                            <template x-for="sh in shifts" :key="sh.nama"><option :value="sh.nama" x-text="sh.nama"></option></template>
+                                            <option value="-">Kosongkan</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <p class="text-xs text-ktl-yellow font-semibold" x-text="formatMinggu(jadwalMinggu)"></p>
+                                <p x-show="jadwalMemuat" class="text-xs text-slate-400 animate-pulse">Memuat jadwal periode…</p>
+                                <fieldset :disabled="loading || jadwalMemuat || !jadwalSiap">
+                                <div class="overflow-x-auto -mx-1">
+                                    <table class="w-full text-[10px] border-separate border-spacing-0.5">
+                                        <thead>
+                                            <tr class="text-slate-400">
+                                                <th class="text-left font-semibold px-1 sticky left-0 bg-slate-900">Staff</th>
+                                                <template x-for="h in HARI_MINGGU" :key="h">
+                                                    <th class="font-semibold px-0.5" x-text="h.slice(0, 3) + ' ' + tanggalHari(jadwalMinggu, h)"></th>
+                                                </template>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <template x-for="st in staffList" :key="st.id">
+                                                <tr>
+                                                    <td class="text-white font-medium px-1 whitespace-nowrap sticky left-0 bg-slate-900" x-text="st.nama"></td>
+                                                    <template x-for="h in HARI_MINGGU" :key="h">
+                                                        <td>
+                                                            <select :aria-label="st.nama + ', ' + h" x-model="jadwalGrid[st.id + '|' + h]"
+                                                                class="w-full min-w-[3.25rem] bg-slate-800 border rounded-md px-0.5 py-1 text-[10px]"
+                                                                :class="jadwalGrid[st.id + '|' + h] === 'Off' ? 'border-red-500/40 text-red-300' : (jadwalGrid[st.id + '|' + h] && jadwalGrid[st.id + '|' + h] !== '-' ? 'border-ktl-yellow/40 text-ktl-yellow' : 'border-slate-700 text-slate-500')">
+                                                                <option value="-">-</option>
+                                                                <template x-for="sh in shifts" :key="sh.nama"><option :value="sh.nama" x-text="sh.nama"></option></template>
+                                                                <option value="Off">Off</option>
+                                                            </select>
+                                                        </td>
+                                                    </template>
+                                                </tr>
+                                            </template>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <p class="text-[10px] text-slate-500">S1 = Shift 1 (11:00), S2 = Shift 2 (15:00).</p>
+                                <button @click="saveJadwalMingguan()" :disabled="loading || jadwalMemuat || !jadwalSiap" class="w-full bg-ktl-red hover:bg-ktl-red-light disabled:opacity-60 text-white font-bold py-2 rounded-xl text-xs transition" x-text="'Simpan Jadwal ' + formatMinggu(jadwalMinggu)"></button>
+                                </fieldset>
+                            </div>
+                        </template>
+
+                        <!-- Jadwal minggu berjalan -->
+                        <div class="space-y-2">
+                            <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider mb-2" x-text="'Minggu Ini • ' + formatMinggu(awalMinggu(today))"></h3>
+                            <template x-if="jadwalMingguanList.length > 0">
+                                <div class="overflow-x-auto -mx-1">
+                                    <table class="w-full text-[10px] border-separate border-spacing-0.5">
+                                        <thead>
+                                            <tr class="text-slate-400">
+                                                <th class="text-left font-semibold px-1 sticky left-0 bg-slate-800">Staff</th>
+                                                <template x-for="h in HARI_MINGGU" :key="h">
+                                                    <th class="font-semibold px-0.5" :class="h === hariIni ? 'text-ktl-yellow' : ''" x-text="h.slice(0, 3) + ' ' + tanggalHari(awalMinggu(today), h)"></th>
+                                                </template>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <template x-for="st in staffList" :key="st.id">
+                                                <tr>
+                                                    <td class="px-1 whitespace-nowrap sticky left-0 bg-slate-800 font-medium" :class="st.id === currentUser.id ? 'text-ktl-yellow' : 'text-white'" x-text="st.nama"></td>
+                                                    <template x-for="h in HARI_MINGGU" :key="h">
+                                                        <td class="text-center rounded py-1 px-0.5 font-bold"
+                                                            :class="[jadwalShift(st.id, h) === 'Off' ? 'bg-red-500/10 text-red-400' : (jadwalShift(st.id, h) ? 'bg-ktl-yellow/10 text-ktl-yellow' : 'bg-slate-900 text-slate-600'), h === hariIni ? 'ring-1 ring-ktl-yellow/40' : '']"
+                                                            x-text="jadwalShift(st.id, h) || '-'"></td>
+                                                    </template>
+                                                </tr>
+                                            </template>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </template>
+                            <template x-if="jadwalMingguanList.length === 0">
+                                <p class="text-xs text-slate-400 text-center py-2">Jadwal minggu ini belum disusun supervisor.</p>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            </template>
+
+            <!-- 6. TAB PENGATURAN & REKAP (SUPERVISOR PANEL) -->
+            <template x-if="activeTab === 'pengaturan' && currentUser.role === 'supervisor'">
+                <div class="space-y-4">
+                    <div class="bg-slate-800 border border-slate-700 rounded-2xl p-5">
+                        <h2 class="text-base font-bold text-white mb-1">⚙️ Pengaturan & Rekap Bulanan</h2>
+                        <p class="text-xs text-slate-400 mb-4">Kelola staff, rekapitulasi absensi, kirim SP, dan ekspor data ke Excel.</p>
+
+                        <!-- Hanya Supervisor -->
+                        <template x-if="currentUser.role === 'supervisor'">
+                            <div class="space-y-6">
+                                <div class="bg-slate-900 rounded-xl p-4 space-y-3">
+                                    <h3 class="text-sm font-bold text-ktl-yellow">Lokasi outlet & pengingat off</h3>
+                                    <p class="text-xs text-slate-400">Isi koordinat outlet sebelum staff melakukan absensi. Izin GPS diperlukan saat pengambilan foto.</p>
+                                    <input aria-label="Latitude outlet" type="number" step="any" x-model="settingsForm.latitude" placeholder="Latitude" class="w-full bg-slate-800 p-2 rounded-lg">
+                                    <input aria-label="Longitude outlet" type="number" step="any" x-model="settingsForm.longitude" placeholder="Longitude" class="w-full bg-slate-800 p-2 rounded-lg">
+                                    <label class="block text-xs">Radius outlet (meter)<input type="number" min="10" max="1000" x-model="settingsForm.radius" class="w-full bg-slate-800 p-2 rounded-lg"></label>
+                                    <label class="block text-xs">Tanggal pengingat off (1–31, kosong bila belum ditentukan)<input type="number" min="1" max="31" x-model="settingsForm.off_hari" class="w-full bg-slate-800 p-2 rounded-lg"></label>
+                                    <button @click="saveSettings()" :disabled="loading" class="bg-ktl-red p-2 rounded-lg text-xs">Simpan pengaturan outlet</button>
+                                </div>
+                                <div class="bg-slate-900 rounded-xl p-4 space-y-3">
+                                    <h3 class="text-sm font-bold text-ktl-yellow">Shift Operasional</h3>
+                                    <template x-for="sh in shifts" :key="sh.nama"><button @click="shiftForm={...sh}" class="block text-xs text-slate-300" x-text="sh.nama + ' • ' + sh.mulai + '–' + sh.selesai + ' • Ubah'"></button></template>
+                                    <p class="text-xs text-slate-400">Gunakan nama yang sama untuk mengubah shift, atau nama baru untuk menambah shift. Perubahan berlaku untuk absen masuk berikutnya.</p>
+                                    <input x-model="shiftForm.nama" aria-label="Nama shift" placeholder="Nama shift" class="w-full bg-slate-800 p-2 rounded-lg">
+                                    <label class="block text-xs">Jam mulai<input type="time" x-model="shiftForm.mulai" class="w-full bg-slate-800 p-2 rounded-lg"></label>
+                                    <label class="block text-xs">Jam selesai<input type="time" x-model="shiftForm.selesai" class="w-full bg-slate-800 p-2 rounded-lg"></label>
+                                    <button @click="run('shifts',{method:'POST',body:shiftForm},'Shift tersimpan.')" :disabled="loading" class="bg-ktl-red p-2 rounded-lg text-xs">Simpan shift</button>
+                                    <p class="text-xs text-amber-300">Pengiriman WhatsApp otomatis memerlukan konfigurasi layanan pengiriman. Pengingat aplikasi tetap aktif.</p>
+                                </div>
+                                <!-- Tombol Ekspor Excel -->
+                                <div class="bg-slate-900 p-4 rounded-xl border border-slate-700 space-y-3">
+                                    <h3 class="text-xs font-bold text-ktl-yellow uppercase tracking-wider">Ekspor Data & Laporan</h3>
+                                    <div>
+                                        <label class="block text-xs text-slate-400 mb-1">Bulan Rekap</label>
+                                        <input type="month" x-model="rekapBulan" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white [color-scheme:dark]">
+                                    </div>
+                                    <button @click="exportToExcel()" :disabled="loading" class="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white font-bold py-2.5 rounded-xl text-xs transition shadow-lg shadow-emerald-600/30 flex items-center justify-center space-x-2">
+                                        <span>📥 Unduh Data Rekap ke Excel</span>
+                                    </button>
+                                </div>
+
+                                <!-- Peninjauan Alasan Telat Staff -->
+                                <div class="space-y-3">
+                                    <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider">Tinjauan Alasan Telat Staff</h3>
+                                    <div class="space-y-2 max-h-60 overflow-y-auto pr-1">
+                                        <template x-for="ab in getPendingAlasanList()" :key="ab.id">
+                                            <div class="bg-slate-900 p-3 rounded-xl border border-slate-700 text-xs space-y-2">
+                                                <div class="flex justify-between items-start">
+                                                    <div>
+                                                        <p class="font-bold text-white" x-text="ab.nama"></p>
+                                                        <p class="text-[10px] text-amber-400" x-text="'Telat: ' + ab.menitTelat + ' menit'"></p>
+                                                    </div>
+                                                    <span class="text-[10px] text-slate-400" x-text="formatTanggal(ab.tanggal)"></span>
+                                                </div>
+                                                <p class="text-slate-300 italic bg-slate-800 p-2 rounded" x-text="'Alasan: &quot;' + ab.keterangan + '&quot;'"></p>
+                                                <div class="flex space-x-2">
+                                                    <button @click="reviewAlasan(ab.id, 'Diterima')" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white py-1.5 rounded-lg font-semibold transition">Terima (Izin)</button>
+                                                    <button @click="reviewAlasan(ab.id, 'Ditolak')" class="flex-1 bg-red-600 hover:bg-red-500 text-white py-1.5 rounded-lg font-semibold transition">Tolak (Potong 10rb)</button>
+                                                </div>
+                                            </div>
+                                        </template>
+                                        <template x-if="getPendingAlasanList().length === 0">
+                                            <p class="text-xs text-slate-400 text-center py-2">Tidak ada alasan telat yang perlu ditinjau.</p>
+                                        </template>
+                                    </div>
+                                </div>
+
+                                <!-- Manajemen Tambah Staff -->
+                                <div class="space-y-3 border-t border-slate-700 pt-4">
+                                    <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider">Tambah Staff Baru</h3>
+                                    <div class="space-y-2">
+                                        <input type="text" x-model="newStaffForm.nama" placeholder="Nama Staff" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
+                                        <input type="text" x-model="newStaffForm.jabatan" placeholder="Jabatan (Kasir / Kitchen / dll)" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
+                                        <input type="tel" x-model="newStaffForm.wa" placeholder="No WhatsApp (Contoh: 0812xxxx)" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
+                                        <button @click="addStaff()" :disabled="loading" class="w-full bg-ktl-red hover:bg-ktl-red-light disabled:opacity-60 text-white font-bold py-2 rounded-xl text-xs transition">Tambah Staff</button>
+                                    </div>
+                                </div>
+
+                                <!-- Kirim Surat SP1 / SP2 via WhatsApp -->
+                                <div class="space-y-3 border-t border-slate-700 pt-4">
+                                    <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider">Kirim Surat Peringatan (SP) ke WhatsApp</h3>
+                                    <div class="space-y-2">
+                                        <select x-model="spForm.staffId" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
+                                            <option value="">-- Pilih Staff --</option>
+                                            <template x-for="st in staffList" :key="st.id">
+                                                <option :value="st.id" x-text="st.nama + ' (' + st.jabatan + ')'"></option>
+                                            </template>
+                                        </select>
+                                        <select x-model="spForm.jenis" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white">
+                                            <option value="SP 1">Surat Peringatan 1 (SP 1)</option>
+                                            <option value="SP 2">Surat Peringatan 2 (SP 2)</option>
+                                        </select>
+                                        <textarea x-model="spForm.alasan" placeholder="Alasan / Pelanggaran SOP..." class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white h-20"></textarea>
+                                        <button @click="kirimSPWhatsApp()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-xs transition shadow-lg shadow-emerald-600/30">Kirim SP via WhatsApp</button>
+                                    </div>
+                                </div>
+
+                                <!-- Daftar Staff Aktif -->
+                                <div class="space-y-3 border-t border-slate-700 pt-4">
+                                    <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider" x-text="'Daftar Staff Aktif (' + staffList.length + ')'"></h3>
+                                    <div class="space-y-2 max-h-60 overflow-y-auto pr-1">
+                                        <template x-for="st in staffList" :key="st.id">
+                                            <div class="bg-slate-900 p-3 rounded-xl border border-slate-700 text-xs flex justify-between items-center">
+                                                <div>
+                                                    <p class="font-bold text-white" x-text="st.nama"></p>
+                                                    <p class="text-slate-400 text-[10px]" x-text="st.jabatan + ' • WA: ' + st.wa"></p>
+                                                </div>
+                                                <button @click="deleteStaff(st.id)" class="text-red-400 hover:text-red-300 text-[10px] bg-red-500/10 px-2.5 py-1 rounded">Hapus</button>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- Jika Staff melihat pengaturan -->
+                        <template x-if="currentUser.role === 'staff'">
+                            <div class="text-center py-6 space-y-2">
+                                <p class="text-xs text-slate-400">Pengaturan lanjutan dan rekapitulasi penuh hanya dapat diakses oleh Supervisor.</p>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </template>
+          </div>
+        </template>
+    </main>
+
+    <!-- BOTTOM NAVIGATION BAR -->
+    <template x-if="currentUser">
+        <nav class="bg-slate-800 border-t border-slate-700 fixed bottom-0 left-0 right-0 z-40 max-w-md md:max-w-4xl mx-auto px-2 py-2 flex justify-around items-center overflow-x-auto shadow-xl">
+            <button @click="activeTab = 'beranda'" :class="activeTab === 'beranda' ? 'text-ktl-yellow bg-slate-900/60' : 'text-slate-400 hover:text-slate-200'" class="flex flex-col items-center py-1 px-2 rounded-xl text-[10px] font-medium transition">
+                <span class="text-base mb-0.5">🏠</span>
+                <span>Beranda</span>
+            </button>
+            <button @click="activeTab = 'absen'" :class="activeTab === 'absen' ? 'text-ktl-yellow bg-slate-900/60' : 'text-slate-400 hover:text-slate-200'" class="flex flex-col items-center py-1 px-2 rounded-xl text-[10px] font-medium transition">
+                <span class="text-base mb-0.5">⏱️</span>
+                <span>Absensi</span>
+            </button>
+            <button @click="activeTab = 'off'" :class="activeTab === 'off' ? 'text-ktl-yellow bg-slate-900/60' : 'text-slate-400 hover:text-slate-200'" class="relative flex flex-col items-center py-1 px-2 rounded-xl text-[10px] font-medium transition">
+                <span class="text-base mb-0.5">🏖️</span>
+                <span>Request Off</span>
+                <template x-if="currentUser.role === 'supervisor' && countPendingOff > 0">
+                    <span class="absolute -top-1 right-0 bg-amber-500 text-slate-950 text-[9px] font-bold rounded-full px-1.5" x-text="countPendingOff"></span>
+                </template>
+            </button>
+            <button @click="activeTab = 'komplimen'" :class="activeTab === 'komplimen' ? 'text-ktl-yellow bg-slate-900/60' : 'text-slate-400 hover:text-slate-200'" class="flex flex-col items-center py-1 px-2 rounded-xl text-[10px] font-medium transition">
+                <span class="text-base mb-0.5">🎁</span>
+                <span>Komplimen</span>
+            </button>
+            <button @click="activeTab = 'jadwal'" :class="activeTab === 'jadwal' ? 'text-ktl-yellow bg-slate-900/60' : 'text-slate-400 hover:text-slate-200'" class="flex flex-col items-center py-1 px-2 rounded-xl text-[10px] font-medium transition">
+                <span class="text-base mb-0.5">📅</span>
+                <span>Jadwal</span>
+            </button>
+            <button @click="activeTab='kasbon'" :class="activeTab === 'kasbon' ? 'text-ktl-yellow' : 'text-slate-400'" class="flex flex-col items-center py-1 px-2 text-[10px]"><span>💵</span>Kasbon</button>
+            <template x-if="currentUser.role === 'supervisor'"><button @click="activeTab = 'pengaturan'" :class="activeTab === 'pengaturan' ? 'text-ktl-yellow bg-slate-900/60' : 'text-slate-400 hover:text-slate-200'" class="relative flex flex-col items-center py-1 px-2 rounded-xl text-[10px] font-medium transition">
+                <span class="text-base mb-0.5">⚙️</span>
+                <span>Pengaturan</span>
+                <template x-if="currentUser.role === 'supervisor' && getPendingAlasanList().length > 0">
+                    <span class="absolute -top-1 right-0 bg-amber-500 text-slate-950 text-[9px] font-bold rounded-full px-1.5" x-text="getPendingAlasanList().length"></span>
+                </template>
+            </button></template>
+        </nav>
+    </template>
+
+    <!-- FOOTER WATERMARK -->
+    <footer class="text-center py-4 text-[10px] text-slate-500 border-t border-slate-800/60 mt-auto" :class="currentUser ? 'mb-16' : ''">
+        AppBy | Hol Mpg | WA (087892660400) | IG me_holan
+    </footer>
+
+    <!-- ALPINE.JS LOGIC SCRIPT -->
+    <script>
+        const SESSION_KEY = 'taichan-session';
+        const TZ = 'Asia/Jakarta';
+
+        // Kecilkan foto dari kamera HP sebelum diunggah (maks 720px, JPEG)
+        function compressImage(file, maxSize = 720) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onerror = reject;
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onerror = reject;
+                    img.onload = () => {
+                        const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+                        const canvas = document.createElement('canvas');
+                        canvas.width = Math.round(img.width * scale);
+                        canvas.height = Math.round(img.height * scale);
+                        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+                        resolve(canvas.toDataURL('image/jpeg', 0.75));
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function taichanApp() {
+            return {
+                currentUser: null,
+                session: null,
+                loading: false,
+                loginType: 'staff',
+                loginInput: '',
+                loginError: '',
+                activeTab: 'beranda',
+                currentTimeFormatted: '',
+                currentDateFormatted: '',
+                today: '',
+                hariIni: '',
+                bulanIni: '',
+
+                staffList: [],
+                absenList: [],
+                requestOffList: [],
+                komplimenList: [], shifts: [], settings: {}, settingsForm: {}, shiftForm: {nama:'',mulai:'',selesai:''}, bukti:null,
+                photoBusy:false, kasbonList: [], kasbonYa:'ya', kasbonJumlah:50000, lokasiMasuk:null, lokasiPulang:null,
+                jadwalMingguanList: [],
+
+                // Form States
+                absenForm: { shift: 'Shift 1', foto: '', keterangan: '' },
+                pulangFoto: '',
+                lemburInput: 0,
+                offFormDate: '',
+                komplimenForm: { makanan: '', minuman: '' },
+                HARI_MINGGU: ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'],
+                jadwalMinggu: '',
+                jadwalMemuat: false,
+                jadwalSiap: false,
+                jadwalGrid: {},
+                offWeekOffset: 0,
+                newStaffForm: { nama: '', jabatan: '', wa: '' },
+                spForm: { staffId: '', jenis: 'SP 1', alasan: '' },
+                rekapBulan: '',
+
+                orientationBusy: false,
+                orientationHelp: false,
+                manualLandscape: false,
+                orientationFullscreen: false,
+
+                releaseOrientation() {
+                    try { window.screen.orientation?.unlock?.(); } catch (e) {}
+                    this.manualLandscape = false;
+                },
+
+                async toggleLandscape() {
+                    if (this.orientationBusy) return;
+                    this.orientationBusy = true;
+                    try {
+                        if (this.manualLandscape) {
+                            this.releaseOrientation();
+                            if (this.orientationFullscreen && document.fullscreenElement) await document.exitFullscreen();
+                            this.orientationFullscreen = false;
+                            return;
+                        }
+                        const orientation = window.screen.orientation;
+                        if (!orientation?.lock) {
+                            this.orientationHelp = true;
+                            return;
+                        }
+                        // Android umumnya mensyaratkan layar penuh dan ketukan pengguna.
+                        if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+                            await document.documentElement.requestFullscreen();
+                            this.orientationFullscreen = true;
+                        }
+                        await orientation.lock('landscape');
+                        this.manualLandscape = true;
+                    } catch (e) {
+                        this.releaseOrientation();
+                        if (this.orientationFullscreen && document.fullscreenElement) {
+                            try { await document.exitFullscreen(); } catch (e) {}
+                        }
+                        this.orientationFullscreen = false;
+                        this.orientationHelp = true;
+                    } finally {
+                        this.orientationBusy = false;
+                    }
+                },
+
+                // Pasang aplikasi (PWA)
+                installPrompt: null,
+                installHelp: false,
+                isStandalone: window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true,
+
+                init() {
+                    // Lepaskan kunci dari manifest instalasi lama, bila didukung browser.
+                    this.releaseOrientation();
+                    window.addEventListener('pageshow', () => {
+                        if (!this.manualLandscape) this.releaseOrientation();
+                    });
+                    document.addEventListener('fullscreenchange', () => {
+                        if (!document.fullscreenElement && this.orientationFullscreen) {
+                            this.orientationFullscreen = false;
+                            this.releaseOrientation();
+                        }
+                    });
+                    window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); this.installPrompt = e; });
+                    window.addEventListener('appinstalled', () => { this.isStandalone = true; this.installPrompt = null; });
+                    this.updateClock();
+                    setInterval(() => this.updateClock(), 1000);
+                    this.rekapBulan = this.bulanIni;
+                    try {
+                        const saved = JSON.parse(localStorage.getItem(SESSION_KEY) || sessionStorage.getItem(SESSION_KEY) || 'null');
+                        if (saved) { this.session = saved; this.loadData(); }
+                    } catch (e) {}
+                    // Sinkron otomatis agar kehadiran live selalu terbaru
+                    setInterval(() => { if (this.session && !document.hidden) this.loadData(true); }, 30000);
+                    document.addEventListener('visibilitychange', () => { if (!document.hidden && this.session) this.loadData(true); });
+                },
+
+                async installApp() {
+                    if (this.installPrompt) {
+                        this.installPrompt.prompt();
+                        await this.installPrompt.userChoice;
+                        this.installPrompt = null;
+                        return;
+                    }
+                    const ua = navigator.userAgent;
+                    const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+                    this.installHelp = isIOS ? 'ios' : 'android';
+                },
+
+                updateClock() {
+                    const now = new Date();
+                    this.currentTimeFormatted = now.toLocaleTimeString('id-ID', { timeZone: TZ, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                    this.currentDateFormatted = now.toLocaleDateString('id-ID', { timeZone: TZ, weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                    this.today = now.toLocaleDateString('en-CA', { timeZone: TZ });
+                    this.hariIni = now.toLocaleDateString('id-ID', { timeZone: TZ, weekday: 'long' }).replace("Jum'at", 'Jumat');
+                    this.bulanIni = this.today.slice(0, 7);
+                },
+
+                get isComplimentDay() {
+                    const d = Number(this.today.slice(8));
+                    return d === 15 || d === 30;
+                },
+
+                formatBulan(b) {
+                    if (!b) return '';
+                    return new Date(b + '-01T00:00:00Z').toLocaleDateString('id-ID', { timeZone: 'UTC', month: 'long', year: 'numeric' });
+                },
+
+                formatTanggal(t) {
+                    if (!t) return '';
+                    return new Date(t + 'T00:00:00Z').toLocaleDateString('id-ID', { timeZone: 'UTC', weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+                },
+
+                get isKasbonDay() { return [16,26].includes(Number(this.today.slice(8))); },
+                get pemberitahuan() {
+                    const list=[];
+                    if(this.isComplimentDay) list.push({tab:'komplimen',pesan:'Hari pengisian komplimen: isi 1 makanan dan 1 minuman.'});
+                    if(this.isKasbonDay) list.push({tab:'kasbon',pesan:'Hari request kasbon: jawab Ya atau Tidak.'});
+                    if(Number(this.settings.off_hari) === Number(this.today.slice(8))) list.push({tab:'off',pesan:'Tanggal pengisian request off telah tiba.'});
+                    return list;
+                },
+                get pengingatPulang() { return this.absenList.filter(a=>!a.waktuPulang && a.selesaiAt && Date.now()>new Date(a.selesaiAt).getTime()+1800000 && !a.sedangLembur && (this.currentUser.role==='supervisor' || a.staffId===this.currentUser.id)); },
+                getPulangRecord() { return this.absenList.find(a=>a.staffId===this.currentUser.id && !a.waktuPulang) || this.getTodayAbsenRecord(this.currentUser.id); },
+                ambilLokasi() { return new Promise((resolve,reject)=> { if(!navigator.geolocation) return reject(new Error('GPS tidak tersedia.')); navigator.geolocation.getCurrentPosition(p=>resolve({latitude:p.coords.latitude,longitude:p.coords.longitude,accuracy:p.coords.accuracy,timestamp:p.timestamp}),()=>reject(new Error('Izin GPS diperlukan. Aktifkan lokasi lalu ambil ulang foto.')),{enableHighAccuracy:true,maximumAge:0,timeout:20000}); }); },
+                mapLink(l) { return l ? 'https://www.google.com/maps?q='+encodeURIComponent(l.latitude+','+l.longitude) : ''; },
+                async unduhFoto(url) { try { const r=await fetch(url); if(!r.ok) throw new Error('Foto tidak tersedia.'); const u=URL.createObjectURL(await r.blob()); const a=document.createElement('a'); a.href=u; a.download='bukti-absensi.jpg'; a.click(); setTimeout(()=>URL.revokeObjectURL(u),1000); } catch(e) { alert(e.message); } },
+                review(t,id,status) { return this.run(t+'/'+id+'/review',{method:'POST',body:{status}},'Keputusan tersimpan.'); },
+                async saveSettings() { const f=this.settingsForm; if(f.latitude==null || f.latitude==='' || f.longitude==null || f.longitude==='') return alert('Isi koordinat outlet.'); await this.run('settings',{method:'POST',body:{latitude:Number(f.latitude),longitude:Number(f.longitude),radius:Number(f.radius),off_hari:f.off_hari==null || f.off_hari==='' ? null : Number(f.off_hari)}},'Pengaturan tersimpan.'); },
+
+                // ---------- API ----------
+                async api(path, { method = 'GET', body, silent = false } = {}) {
+                    const headers = { 'content-type': 'application/json' };
+                    if (this.session?.role === 'supervisor') headers['x-pin'] = this.session.pin;
+                    if (this.session?.role === 'staff') headers['x-wa'] = this.session.wa;
+                    if (!silent) this.loading = true;
+                    try {
+                        const res = await fetch('/api/' + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
+                        const data = await res.json().catch(() => ({}));
+                        if (res.status === 401 && path !== 'login') { this.logout(); }
+                        if (!res.ok) throw new Error(data.error || 'Gagal terhubung ke server.');
+                        return data;
+                    } finally {
+                        if (!silent) this.loading = false;
+                    }
+                },
+
+                async loadData(silent = false) {
+                    try {
+                        const d = await this.api('data', { silent });
+                        this.currentUser = d.user;
+                        if(new URLSearchParams(location.search).get('aksi')) { this.activeTab='absen'; history.replaceState(null,'',location.pathname); }
+                        this.staffList = d.staffList;
+                        this.absenList = d.absenList;
+                        this.requestOffList = d.requestOffList;
+                        this.komplimenList = d.komplimenList;
+                        this.shifts = d.shifts; this.settings = d.settings; this.kasbonList = d.kasbonList;
+                        if (!silent || !Object.keys(this.settingsForm).length) this.settingsForm = {...d.settings};
+                        this.jadwalMingguanList = d.jadwalMingguanList;
+                    } catch (e) {
+                        if (!silent) alert(e.message);
+                    }
+                },
+
+                async run(path, opts, successMsg) {
+                    try {
+                        const res = await this.api(path, opts);
+                        await this.loadData(true);
+                        if (successMsg) alert(typeof successMsg === 'function' ? successMsg(res) : successMsg);
+                        return true;
+                    } catch (e) {
+                        alert(e.message);
+                        return false;
+                    }
+                },
+
+                // ---------- LOGIN ----------
+                async login(type, value, session) {
+                    this.loginError = '';
+                    try {
+                        await this.api('login', { method: 'POST', body: { type, value } });
+                        this.session = session;
+                        // Sesi staff diingat di HP; PIN supervisor hanya selama tab terbuka
+                        (type === 'staff' ? localStorage : sessionStorage).setItem(SESSION_KEY, JSON.stringify(session));
+                        this.loginInput = '';
+                        this.activeTab = new URLSearchParams(location.search).get('aksi') ? 'absen' : 'beranda';
+                        await this.loadData();
+                    } catch (e) {
+                        this.loginError = e.message;
+                    }
+                },
+
+                loginStaff() {
+                    const wa = this.loginInput.replace(/[^0-9]/g, '');
+                    if (!wa) { this.loginError = 'Masukkan nomor WhatsApp.'; return; }
+                    this.login('staff', wa, { role: 'staff', wa });
+                },
+
+                loginSupervisor() {
+                    if (!this.loginInput) { this.loginError = 'Masukkan PIN.'; return; }
+                    this.login('supervisor', this.loginInput, { role: 'supervisor', pin: this.loginInput });
+                },
+
+                logout() {
+                    this.currentUser = null;
+                    this.session = null;
+                    localStorage.removeItem(SESSION_KEY);
+                    sessionStorage.removeItem(SESSION_KEY);
+                    this.activeTab = 'beranda';
+                },
+
+                // ---------- ABSENSI ----------
+                async handlePhotoUpload(event) {
+                    await this.processDevicePhoto(event, 'masuk');
+                },
+
+                async handlePulangPhoto(event) {
+                    await this.processDevicePhoto(event, 'pulang');
+                },
+
+                async processDevicePhoto(event, jenis) {
+                    const input = event.target;
+                    const file = input.files?.[0];
+                    if (!file || this.photoBusy) return;
+                    this.photoBusy = true;
+                    if (jenis === 'masuk') { this.absenForm.foto = ''; this.lokasiMasuk = null; }
+                    else { this.pulangFoto = ''; this.lokasiPulang = null; }
+                    try {
+                        if (!file.type.startsWith('image/')) throw new Error('Gunakan berkas foto yang valid.');
+                        const lokasi = await this.ambilLokasi();
+                        const foto = await compressImage(file);
+                        if (jenis === 'masuk') { this.absenForm.foto = foto; this.lokasiMasuk = lokasi; }
+                        else { this.pulangFoto = foto; this.lokasiPulang = lokasi; }
+                    } catch (e) {
+                        alert(e.message || 'Foto tidak dapat diproses. Silakan ambil ulang foto.');
+                    } finally {
+                        input.value = '';
+                        this.photoBusy = false;
+                    }
+                },
+
+                async submitAbsen() {
+                    if (!this.absenForm.foto) {
+                        alert('Wajib mengambil foto wajah di lokasi outlet!');
+                        return;
+                    }
+                    const ok = await this.run('absen', { method: 'POST', body: {...this.absenForm,lokasi:this.lokasiMasuk} }, (r) =>
+                        r.status === 'Tepat Waktu'
+                            ? 'Absen berhasil! Tepat Waktu (' + r.waktu + ').'
+                            : r.status === 'Tidak Masuk' ? 'Lewat 60 menit: tidak masuk dan tidak dihitung kerja.' : 'Status: ' + r.status + ' • terlambat ' + r.menitTelat + ' menit.');
+                    if (ok) this.absenForm = { shift: 'Shift 1', foto: '', keterangan: '' };
+                },
+
+                async submitPulangLembur() {
+                    const ok = await this.run('pulang', { method: 'POST', body: { foto: this.pulangFoto, lokasi:this.lokasiPulang, lembur: this.lemburInput } },
+                        'Absen pulang dan jam lembur berhasil disimpan!');
+                    if (ok) { this.lemburInput = 0; this.pulangFoto = ''; }
+                },
+
+                getTodayAbsenRecord(staffId) {
+                    return this.absenList.find(a => a.staffId === staffId && a.tanggal === this.today) || {};
+                },
+
+                hasCheckedInToday(staffId) {
+                    return !!this.getTodayAbsenRecord(staffId).id;
+                },
+
+                isApprovedOffToday(staffId) {
+                    return this.requestOffList.some(r => r.staffId === staffId && r.tanggal === this.today && r.status === 'Disetujui');
+                },
+
+                getStaffShiftToday(staffId) {
+                    if (this.isApprovedOffToday(staffId)) return 'Off';
+                    const jd = this.jadwalMingguanList.find(j => j.staffId === staffId && j.hari === this.hariIni);
+                    return jd ? jd.shift : 'Belum dijadwalkan';
+                },
+
+                isStaffOffToday(staffId) {
+                    return this.getStaffShiftToday(staffId) === 'Off';
+                },
+
+                getStaffStatusTodayText(staffId) {
+                    if (this.hasCheckedInToday(staffId)) return this.getTodayAbsenRecord(staffId).status;
+                    if (this.isStaffOffToday(staffId)) return 'Off';
+                    return 'Belum Absen';
+                },
+
+                getLiveAbsenToday() {
+                    return this.absenList.filter(a => a.tanggal === this.today);
+                },
+
+                getStaffOffTodayList() {
+                    return this.staffList.filter(s => this.isStaffOffToday(s.id));
+                },
+
+                getTotalTelatStaff(staffId) {
+                    return this.absenList.filter(a => a.staffId === staffId && a.tanggal.startsWith(this.bulanIni) && a.status === 'Telat').length;
+                },
+
+                // ---------- REQUEST OFF ----------
+                getSisaOff(staffId) {
+                    const used = this.requestOffList.filter(r => r.staffId === staffId && r.status !== 'Ditolak' && r.tanggal.startsWith(this.bulanIni)).length;
+                    return Math.max(0, 4 - used);
+                },
+
+                async submitRequestOff() {
+                    if (!this.offFormDate) {
+                        alert('Pilih tanggal off terlebih dahulu.');
+                        return;
+                    }
+                    const day = new Date(this.offFormDate + 'T00:00:00Z').getUTCDay();
+                    if (day === 0 || day === 6) {
+                        alert('Off hanya bisa diambil hari Senin - Jumat.');
+                        return;
+                    }
+                    const ok = await this.run('off', { method: 'POST', body: { tanggal: this.offFormDate } }, 'Request off berhasil dikirim ke supervisor.');
+                    if (ok) this.offFormDate = '';
+                },
+
+                getMyRequestOff(staffId) {
+                    return this.requestOffList.filter(r => r.staffId === staffId);
+                },
+
+                async cancelRequestOff(id) {
+                    if (confirm('Batalkan request off ini?')) await this.run('off/' + id, { method: 'DELETE' });
+                },
+
+                async setStatusOff(id, status) {
+                    await this.run('off/' + id + '/status', { method: 'POST', body: { status } });
+                },
+
+                // Senin s/d Jumat pada minggu yang sedang dilihat
+                get offWeekDays() {
+                    if (!this.today) return [];
+                    const d = new Date(this.today + 'T00:00:00Z');
+                    d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7) + this.offWeekOffset * 7);
+                    return this.HARI_MINGGU.slice(0, 5).map((hari, i) => {
+                        const t = new Date(d.getTime() + i * 86400000).toISOString().slice(0, 10);
+                        return {
+                            tanggal: t,
+                            label: hari + ' ' + Number(t.slice(8, 10)),
+                            list: this.requestOffList.filter(r => r.tanggal === t && r.status !== 'Ditolak')
+                        };
+                    });
+                },
+
+                get offWeekLabel() {
+                    const days = this.offWeekDays;
+                    if (!days.length) return '';
+                    const end = new Date(days[4].tanggal + 'T00:00:00Z');
+                    end.setUTCDate(end.getUTCDate() + 2);
+                    const fmt = (dt, opt) => dt.toLocaleDateString('id-ID', { timeZone: 'UTC', ...opt });
+                    return fmt(new Date(days[0].tanggal + 'T00:00:00Z'), { day: 'numeric', month: 'short' }) + ' – ' + fmt(end, { day: 'numeric', month: 'short', year: 'numeric' });
+                },
+
+                get countPendingOff() {
+                    return this.requestOffList.filter(r => r.status === 'Pending').length;
+                },
+
+                // ---------- KOMPLIMEN ----------
+                async saveKomplimen() {
+                    const ok = await this.run('komplimen', {method:'POST',body:this.komplimenForm},'Komplimen dikirim untuk ditinjau supervisor.');
+                    if(ok) this.komplimenForm={makanan:'',minuman:''};
+                },
+
+                async deleteKomplimen(id) {
+                    if (confirm('Hapus data komplimen ini?')) await this.run('komplimen/' + id, { method: 'DELETE' });
+                },
+
+                get countKomplimenPeriodeIni() {
+                    const periode = Number(this.today.slice(8, 10)) > 15 ? 'Tanggal 30' : 'Tanggal 15';
+                    return new Set(this.komplimenList.filter(k => k.periode === periode).map(k => k.staffId)).size;
+                },
+
+                // ---------- JADWAL ----------
+                jadwalShift(staffId, hari) {
+                    const jd = this.jadwalMingguanList.find(j => j.staffId === staffId && j.hari === hari);
+                    return jd ? jd.shift : '';
+                },
+
+                awalMinggu(tanggal) {
+                    const d = new Date(tanggal + 'T00:00:00Z');
+                    d.setUTCDate(d.getUTCDate() - (d.getUTCDay() + 6) % 7);
+                    return d.toISOString().slice(0, 10);
+                },
+                tanggalHari(minggu, hari) {
+                    if (!minggu) return '';
+                    const d = new Date(minggu + 'T00:00:00Z');
+                    d.setUTCDate(d.getUTCDate() + this.HARI_MINGGU.indexOf(hari));
+                    return d.toLocaleDateString('id-ID', {day:'numeric', month:'short', timeZone:'UTC'});
+                },
+                formatMinggu(minggu) {
+                    if (!minggu) return '';
+                    return this.tanggalHari(minggu, 'Senin') + ' – ' + this.tanggalHari(minggu, 'Minggu') + ' ' + minggu.slice(0, 4);
+                },
+                async loadJadwalEditor() {
+                    this.jadwalMinggu = this.awalMinggu(this.jadwalMinggu || this.today);
+                    this.jadwalMemuat = true;
+                    this.jadwalSiap = false;
+                    try {
+                        const { list } = await this.api('jadwal?minggu=' + encodeURIComponent(this.jadwalMinggu), { silent: true });
+                        const grid = {};
+                        this.staffList.forEach(st => this.HARI_MINGGU.forEach(h => { grid[st.id + '|' + h] = '-'; }));
+                        list.forEach(j => { if (grid[j.staffId + '|' + j.hari]) grid[j.staffId + '|' + j.hari] = j.shift; });
+                        this.jadwalGrid = grid;
+                        this.jadwalSiap = true;
+                    } catch (e) {
+                        alert(e.message);
+                    } finally {
+                        this.jadwalMemuat = false;
+                    }
+                },
+
+                isiSemuaJadwal(shift) {
+                    if (!shift || !this.jadwalSiap || this.jadwalMemuat || this.loading) return;
+                    Object.keys(this.jadwalGrid).forEach(k => { this.jadwalGrid[k] = shift; });
+                },
+
+                async saveJadwalMingguan() {
+                    if (!this.jadwalSiap || this.jadwalMemuat || this.loading) return;
+                    const items = Object.entries(this.jadwalGrid)
+                        .filter(([, shift]) => shift && shift !== '-')
+                        .map(([k, shift]) => { const [staffId, hari] = k.split('|'); return { staffId: Number(staffId), hari, shift }; });
+                    if (items.length === 0 && !confirm('Semua sel kosong. Hapus jadwal ' + this.formatMinggu(this.jadwalMinggu) + '?')) return;
+                    await this.run('jadwal', { method: 'POST', body: { minggu: this.jadwalMinggu, items } },
+                        'Jadwal 1 minggu untuk ' + this.formatMinggu(this.jadwalMinggu) + ' berhasil disimpan.');
+
+                },
+
+                // ---------- SUPERVISOR ----------
+                getPendingAlasanList() {
+                    return this.absenList.filter(a => a.status === 'Menunggu Review');
+                },
+
+                async reviewAlasan(id, keputusan) {
+                    await this.run('absen/' + id + '/review', { method: 'POST', body: { keputusan } });
+                },
+
+                async addStaff() {
+                    if (!this.newStaffForm.nama || !this.newStaffForm.wa) {
+                        alert('Lengkapi nama dan nomor WhatsApp staff.');
+                        return;
+                    }
+                    const ok = await this.run('staff', { method: 'POST', body: this.newStaffForm }, 'Staff baru berhasil ditambahkan.');
+                    if (ok) this.newStaffForm = { nama: '', jabatan: '', wa: '' };
+                },
+
+                async deleteStaff(id) {
+                    if (confirm('Yakin ingin menghapus staff ini? Riwayat absensinya tetap tersimpan untuk rekap.')) {
+                        await this.run('staff/' + id, { method: 'DELETE' });
+                    }
+                },
+
+                kirimSPWhatsApp() {
+                    if (!this.spForm.staffId || !this.spForm.alasan) {
+                        alert('Pilih staff dan isi alasan SP.');
+                        return;
+                    }
+                    const st = this.staffList.find(s => s.id == this.spForm.staffId);
+                    let pesan = `Halo ${st.nama},\n\nAnda mendapatkan ${this.spForm.jenis} dari Supervisor Taichan KTL Cemara Asri.\nAlasan/Pelanggaran: ${this.spForm.alasan}\n\nHarap diperhatikan kembali SOP outlet. Terima kasih.`;
+                    // wa.me butuh format internasional: 08xx -> 628xx
+                    let nomor = st.wa.replace(/[^0-9]/g, '').replace(/^0/, '62');
+                    let waUrl = `https://wa.me/${nomor}?text=${encodeURIComponent(pesan)}`;
+                    window.open(waUrl, '_blank');
+                },
+
+                async exportToExcel() {
+                    try {
+                        const { bulan, rows } = await this.api('rekap?bulan=' + encodeURIComponent(this.rekapBulan || this.bulanIni));
+                        if (rows.length === 0) { alert('Belum ada data absensi pada bulan ' + bulan + '.'); return; }
+                        const detail = rows.map(a => ({
+                            Nama: a.nama,
+                            Jabatan: a.jabatan,
+                            Tanggal: a.tanggal,
+                            Shift: a.shift,
+                            'Jam Masuk': a.waktu,
+                            'Jam Pulang': a.waktuPulang || '-',
+                            Status: a.status,
+                            'Menit Telat': a.menitTelat,
+                            'Lembur (Jam)': a.lembur,
+                            Keterangan: a.keterangan || '-'
+                        }));
+                        const perStaff = {};
+                        rows.forEach(a => {
+                            const s = perStaff[a.staffId] ||= { Nama: a.nama, Jabatan: a.jabatan, Hadir: 0, 'Tepat Waktu': 0, Telat: 0, 'Sudah Izin': 0, 'Total Lembur (Jam)': 0, 'Potongan Telat (Rp)': 0 };
+                            if (!a.dihitungKerja) return;
+                            s.Hadir++;
+                            if (a.status === 'Tepat Waktu') s['Tepat Waktu']++;
+                            if (a.status === 'Telat') { s.Telat++; s['Potongan Telat (Rp)'] += 10000; }
+                            if (a.status === 'Sudah Izin') s['Sudah Izin']++;
+                            s['Total Lembur (Jam)'] += a.lembur;
+                        });
+                        const wb = XLSX.utils.book_new();
+                        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(Object.values(perStaff)), "Ringkasan");
+                        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detail), "Rekap Absensi");
+                        XLSX.writeFile(wb, `Rekap_Absensi_Taichan_Cemara_${bulan}.xlsx`);
+                    } catch (e) {
+                        alert(e.message);
+                    }
+                },
+
+                get countHadirToday() {
+                    return this.getLiveAbsenToday().filter(a=>a.dihitungKerja).length;
+                },
+
+                get countTelatToday() {
+                    return this.getLiveAbsenToday().filter(a => a.status === 'Telat' || a.status === 'Menunggu Review').length;
+                },
+
+                get countOffToday() {
+                    return this.getStaffOffTodayList().length;
+                }
+            }
+        }
+    </script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+        }
+    </script>
+</body>
+</html>

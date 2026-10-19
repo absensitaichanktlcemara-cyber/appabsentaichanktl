@@ -1,0 +1,14 @@
+{
+  "name": "absensi-taichan-ktl",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@netlify/blobs": "^11.1.4",
+    "@netlify/database": "^2.0.1"
+  },
+  "devDependencies": {
+    "@netlify/functions": "^6.0.2",
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2"
+  }
+}
