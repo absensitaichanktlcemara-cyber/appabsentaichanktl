@@ -54,6 +54,22 @@
             padding-right: max(0.5rem, env(safe-area-inset-right));
         }
         nav > button { flex-shrink: 0; }
+        .staff-reminder { overflow: hidden; }
+        .staff-reminder-track {
+            display: flex;
+            width: max-content;
+            animation: staff-reminder-scroll 18s linear infinite;
+        }
+        .staff-reminder-track > span { flex-shrink: 0; padding-right: 3rem; }
+        .staff-reminder:hover .staff-reminder-track { animation-play-state: paused; }
+        @keyframes staff-reminder-scroll {
+            to { transform: translateX(-50%); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .staff-reminder-track { width: auto; animation: none; }
+            .staff-reminder-track > span { padding-right: 0; }
+            .staff-reminder-track > span[aria-hidden] { display: none; }
+        }
         .install-help-panel {
             max-height: calc(100vh - 2rem);
             max-height: calc(100dvh - 2rem - env(safe-area-inset-top) - env(safe-area-inset-bottom));
@@ -191,6 +207,14 @@
         <!-- ================= UTAMA APLIKASI (SUDAH LOGIN) ================= -->
         <template x-if="currentUser">
           <div>
+            <template x-if="currentUser.role === 'staff'">
+                <div class="staff-reminder bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-3 mb-4 text-sm font-semibold text-amber-300">
+                    <div class="staff-reminder-track">
+                        <span>Pastikan Kamu Sudah Berpakaian Rapi (Sesusai SOP yaa</span>
+                        <span aria-hidden="true">Pastikan Kamu Sudah Berpakaian Rapi (Sesusai SOP yaa</span>
+                    </div>
+                </div>
+            </template>
             <!-- Notifikasi Tanggal 15 & 30 Compliment -->
             <template x-if="isComplimentDay && currentUser.role === 'supervisor'">
                 <div class="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 mb-4 flex items-start space-x-3">
@@ -835,7 +859,11 @@
             </button>
             <button @click="activeTab = 'absen'" :class="activeTab === 'absen' ? 'text-ktl-yellow bg-slate-900/60' : 'text-slate-400 hover:text-slate-200'" class="flex flex-col items-center py-1 px-2 rounded-xl text-[10px] font-medium transition">
                 <span class="text-base mb-0.5">⏱️</span>
-                <span>Absensi</span>
+                <span>Absen Masuk</span>
+            </button>
+            <button @click="activeTab = 'jadwal'" :class="activeTab === 'jadwal' ? 'text-ktl-yellow bg-slate-900/60' : 'text-slate-400 hover:text-slate-200'" class="flex flex-col items-center py-1 px-2 rounded-xl text-[10px] font-medium transition">
+                <span class="text-base mb-0.5">📅</span>
+                <span>Jadwal</span>
             </button>
             <button @click="activeTab = 'off'" :class="activeTab === 'off' ? 'text-ktl-yellow bg-slate-900/60' : 'text-slate-400 hover:text-slate-200'" class="relative flex flex-col items-center py-1 px-2 rounded-xl text-[10px] font-medium transition">
                 <span class="text-base mb-0.5">🏖️</span>
@@ -844,15 +872,11 @@
                     <span class="absolute -top-1 right-0 bg-amber-500 text-slate-950 text-[9px] font-bold rounded-full px-1.5" x-text="countPendingOff"></span>
                 </template>
             </button>
+            <button @click="activeTab='kasbon'" :class="activeTab === 'kasbon' ? 'text-ktl-yellow' : 'text-slate-400'" class="flex flex-col items-center py-1 px-2 text-[10px]"><span>💵</span>Kasbon</button>
             <button @click="activeTab = 'komplimen'" :class="activeTab === 'komplimen' ? 'text-ktl-yellow bg-slate-900/60' : 'text-slate-400 hover:text-slate-200'" class="flex flex-col items-center py-1 px-2 rounded-xl text-[10px] font-medium transition">
                 <span class="text-base mb-0.5">🎁</span>
                 <span>Komplimen</span>
             </button>
-            <button @click="activeTab = 'jadwal'" :class="activeTab === 'jadwal' ? 'text-ktl-yellow bg-slate-900/60' : 'text-slate-400 hover:text-slate-200'" class="flex flex-col items-center py-1 px-2 rounded-xl text-[10px] font-medium transition">
-                <span class="text-base mb-0.5">📅</span>
-                <span>Jadwal</span>
-            </button>
-            <button @click="activeTab='kasbon'" :class="activeTab === 'kasbon' ? 'text-ktl-yellow' : 'text-slate-400'" class="flex flex-col items-center py-1 px-2 text-[10px]"><span>💵</span>Kasbon</button>
             <template x-if="currentUser.role === 'supervisor'"><button @click="activeTab = 'pengaturan'" :class="activeTab === 'pengaturan' ? 'text-ktl-yellow bg-slate-900/60' : 'text-slate-400 hover:text-slate-200'" class="relative flex flex-col items-center py-1 px-2 rounded-xl text-[10px] font-medium transition">
                 <span class="text-base mb-0.5">⚙️</span>
                 <span>Pengaturan</span>
